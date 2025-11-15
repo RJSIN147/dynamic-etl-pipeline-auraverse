@@ -1,0 +1,9 @@
+Employee Directory
+==================
+
+Employee ID,Full Name,Department,Salary,Start Date
+E001,Sarah Johnson,Engineering,95000,2020-01-15
+E002,Michael Chen,Marketing,75000,2019-06-01
+E003,Emily Davis,Engineering,98000,2021-03-10
+E004,David Wilson,Sales,82000,2020-08-22
+E005,Lisa Anderson,HR,70000,2018-11-05
