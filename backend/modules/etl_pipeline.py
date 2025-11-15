@@ -125,15 +125,18 @@ class ETLPipeline:
             collection_name = f"{frag_type}_data"
             collection = self.db[collection_name]
             
-            # Add source_id to each record
+            # Create copies of records to avoid modifying originals
+            records_to_insert = []
             for record in cleaned_records:
-                record['_source_id'] = source_id
-                record['_uploaded_at'] = datetime.now(timezone.utc).isoformat()
+                record_copy = record.copy()
+                record_copy['_source_id'] = source_id
+                record_copy['_uploaded_at'] = datetime.now(timezone.utc).isoformat()
+                records_to_insert.append(record_copy)
             
             # Insert records
-            if cleaned_records:
-                await collection.insert_many(cleaned_records)
-                logger.info(f"Loaded {len(cleaned_records)} records into {collection_name}")
+            if records_to_insert:
+                await collection.insert_many(records_to_insert)
+                logger.info(f"Loaded {len(records_to_insert)} records into {collection_name}")
     
     async def _log_upload(self, source_id: str, file_path: str, file_type: str, 
                          fragments: List[Dict[str, Any]], record_count: int):
