@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class DataExtractor:
     """Extract structured data from mixed-format text."""
     
-    def __init__(self, use_slm: bool = True):
+    def __init__(self, use_slm: bool = False):
         self.use_slm = use_slm
         self.ollama_client = OllamaClient() if use_slm else None
     
