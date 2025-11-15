@@ -1,0 +1,17 @@
+Product Catalog (JSON):
+{"product_id": 1, "name": "Laptop", "price": 999.99, "category": "Electronics"}
+{"product_id": 2, "name": "Mouse", "price": 29.99, "category": "Accessories"}
+{"product_id": 3, "name": "Keyboard", "price": 79.99, "category": "Accessories"}
+
+Customer List (CSV):
+customer_id,name,email,country
+C001,Alice Johnson,alice@email.com,USA
+C002,Bob Smith,bob@email.com,Canada
+C003,Carol Davis,carol@email.com,UK
+
+Store Locations (HTML):
+<table>
+  <tr><th>Store ID</th><th>City</th><th>Manager</th></tr>
+  <tr><td>S001</td><td>New York</td><td>John Doe</td></tr>
+  <tr><td>S002</td><td>Los Angeles</td><td>Jane Smith</td></tr>
+</table>

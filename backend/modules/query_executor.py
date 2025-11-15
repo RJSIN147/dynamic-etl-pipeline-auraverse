@@ -2,6 +2,7 @@
 import logging
 import json
 from typing import Dict, Any, List
+from bson.objectid import ObjectId  # <-- ADDED THIS IMPORT
 from .ollama_client import OllamaClient
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,24 @@ class QueryExecutor:
                 }
             }
     
+    # vvv ADDED THIS HELPER METHOD vvv
+    def _serialize_mongo_results(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Recursively convert ObjectId to str for JSON serialization."""
+        for record in results:
+            for key, value in record.items():
+                if isinstance(value, ObjectId):
+                    record[key] = str(value)
+                elif isinstance(value, dict):
+                    # Recurse for nested dicts (if any)
+                    self._serialize_mongo_results([value])
+                elif isinstance(value, list):
+                    # Recurse for nested lists (if any)
+                    for item in value:
+                        if isinstance(item, dict):
+                            self._serialize_mongo_results([item])
+        return results
+    # ^^^ ADDED THIS HELPER METHOD ^^^
+
     async def _execute_mongo_query(self, query_obj: Dict[str, Any], schema: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Execute parsed MongoDB query."""
         operation = query_obj.get('operation', 'find')
@@ -108,7 +127,8 @@ class QueryExecutor:
                 results = await collection.aggregate(pipeline).to_list(1000)
                 all_results.extend(results)
         
-        return all_results
+        # <-- CHANGED: Call serializer before returning -->
+        return self._serialize_mongo_results(all_results)
     
     async def _log_query(self, source_id: str, query_type: str, original_query: str, 
                         translated_query: str, result_count: int, error: str):
