@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 # Configuration
-API_URL = os.environ.get('API_URL', 'http://localhost:8001/api')
+API_URL = os.environ.get('API_URL', 'http://localhost:8000/api')
 
 # Page config
 st.set_page_config(
