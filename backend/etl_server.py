@@ -59,7 +59,7 @@ class QueryRequest(BaseModel):
     query_text: str
 
 class UploadResponse(BaseModel):
-    source_id: str
+    source_id: Optional[str] = None
     status: str
     parsed_summary: Optional[Dict[str, Any]] = None
     schema: Optional[Dict[str, Any]] = None
