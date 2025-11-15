@@ -1,0 +1,33 @@
+Product Data (JSON format):
+{"product_id": 1, "name": "Laptop", "price": 999.99, "category": "Electronics"}
+{"product_id": 2, "name": "Mouse", "price": 29.99, "category": "Accessories"}
+{"product_id": 3, "name": "Keyboard", "price": 79.99, "category": "Accessories"}
+
+Customer Data (CSV format):
+customer_id,name,email,city
+101,John Doe,john@example.com,New York
+102,Jane Smith,jane@example.com,Los Angeles
+103,Bob Johnson,bob@example.com,Chicago
+
+Store Locations (HTML table):
+<table>
+  <thead>
+    <tr>
+      <th>Store ID</th>
+      <th>Location</th>
+      <th>Manager</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>S001</td>
+      <td>Downtown</td>
+      <td>Alice Williams</td>
+    </tr>
+    <tr>
+      <td>S002</td>
+      <td>Uptown</td>
+      <td>Charlie Brown</td>
+    </tr>
+  </tbody>
+</table>
