@@ -98,9 +98,15 @@ class DataCleaner:
         
         for record in records:
             # Create a hashable representation
-            record_tuple = tuple(sorted(record.items()))
-            if record_tuple not in seen:
-                seen.add(record_tuple)
+            try:
+                # Convert to JSON string for hashing (handles nested structures)
+                import json
+                record_key = json.dumps(record, sort_keys=True, default=str)
+                if record_key not in seen:
+                    seen.add(record_key)
+                    unique_records.append(record)
+            except (TypeError, ValueError):
+                # If we can't hash it, just add it
                 unique_records.append(record)
         
         return unique_records
