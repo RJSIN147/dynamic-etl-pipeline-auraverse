@@ -147,7 +147,7 @@ logger = logging.getLogger(__name__)
 class OllamaClient:
     """Client for interacting with Ollama models."""
     
-    def __init__(self, model: str = "qwen2.5:0.5b"):
+    def __init__(self, model: str = "llama3:8b"):
         self.model = model
         self.client = ollama
         
