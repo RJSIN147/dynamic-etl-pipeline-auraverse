@@ -220,24 +220,46 @@ class DataExtractor:
         for i, line in enumerate(lines):
             stripped = line.strip()
             
+            # Skip lines that are clearly JSON
+            if stripped.startswith(('{', '[', '}', ']')) or ':' in stripped and '{' in stripped:
+                if in_csv and current_csv:
+                    # End CSV block
+                    csv_text = '\n'.join(current_csv)
+                    parsed = self._parse_csv(csv_text, delimiter)
+                    if parsed and len(parsed) >= 2:  # Need at least 2 rows for valid CSV
+                        fragments.append({
+                            "type": "csv",
+                            "start_line": csv_start + 1,
+                            "end_line": i,
+                            "content": csv_text,
+                            "parsed_data": parsed,
+                            "delimiter": delimiter
+                        })
+                    in_csv = False
+                    csv_start = -1
+                    current_csv = []
+                continue
+            
             # Detect CSV by checking for consistent delimiters
-            if not in_csv:
+            if not in_csv and stripped:
                 for delim in [',', ';', '\t', '|']:
-                    if delim in stripped and len(stripped.split(delim)) > 1:
-                        in_csv = True
-                        csv_start = i
-                        current_csv = [line]
-                        delimiter = delim
-                        break
+                    if delim in stripped and len(stripped.split(delim)) >= 2:
+                        # Check if it looks like CSV (not JSON)
+                        if ':' not in stripped or delim != ',':
+                            in_csv = True
+                            csv_start = i
+                            current_csv = [line]
+                            delimiter = delim
+                            break
             elif in_csv:
                 # Check if line continues CSV pattern
-                if delimiter in stripped or stripped == '':
+                if (delimiter in stripped and len(stripped.split(delimiter)) >= 2) or stripped == '':
                     current_csv.append(line)
                 else:
                     # End of CSV
                     csv_text = '\n'.join(current_csv)
                     parsed = self._parse_csv(csv_text, delimiter)
-                    if parsed:
+                    if parsed and len(parsed) >= 2:  # Need at least 2 rows
                         fragments.append({
                             "type": "csv",
                             "start_line": csv_start + 1,
@@ -255,7 +277,7 @@ class DataExtractor:
         if in_csv and current_csv:
             csv_text = '\n'.join(current_csv)
             parsed = self._parse_csv(csv_text, delimiter)
-            if parsed:
+            if parsed and len(parsed) >= 2:
                 fragments.append({
                     "type": "csv",
                     "start_line": csv_start + 1,
