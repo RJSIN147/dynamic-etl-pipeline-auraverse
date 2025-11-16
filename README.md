@@ -141,7 +141,7 @@ pip install -r requirements.txt
 ### Frontend
 
 ```bash
-# from frontend_streamlit/
+# from frontend/
 pip install -r requirements.txt
 ```
 
@@ -186,7 +186,7 @@ Backend will be available at:
 ## **Terminal 3 — Frontend (Streamlit)**
 
 ```bash
-cd frontend_streamlit
+cd frontend
 streamlit run app.py
 ```
 
