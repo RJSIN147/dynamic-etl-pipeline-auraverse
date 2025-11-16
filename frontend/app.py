@@ -33,12 +33,11 @@ st.markdown("""
         margin-bottom: 1rem;
         color: #667eea;
     }
-    .info-box {
-        background: #f0f2f6;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin-bottom: 1rem;
-    }
+    
+    /* * REMOVED the problematic .info-box CSS rule. 
+     * We will use st.info() instead.
+     */
+    
     .success-box {
         background: #d4edda;
         color: #155724;
@@ -96,13 +95,14 @@ st.session_state.source_id = st.sidebar.text_input(
 if page == "Upload & Process":
     st.markdown('<div class="section-header">📁 Upload & Process File</div>', unsafe_allow_html=True)
     
-    st.markdown("""
-    <div class="info-box">
-    <strong>Supported Formats:</strong> .txt, .pdf, .md<br>
-    <strong>Supported Data Types:</strong> HTML, JSON, CSV (can be mixed in a single file)<br>
-    <strong>Pipeline Steps:</strong> Extract → Clean → Schema Generation → Load → Query Ready
-    </div>
-    """, unsafe_allow_html=True)
+    # --- FIX: Replaced custom info-box markdown with st.info() ---
+    st.info(
+        """
+        **Supported Formats:** .txt, .pdf, .md  
+        **Supported Data Types:** HTML, JSON, CSV (can be mixed in a single file)  
+        **Pipeline Steps:** Extract → Clean → Schema Generation → Load → Query Ready
+        """
+    )
     
     col1, col2 = st.columns([2, 1])
     
@@ -253,11 +253,10 @@ elif page == "Query Data":
     )
     
     if query_type == "Natural Language":
-        st.markdown("""
-        <div class="info-box">
-        <strong>Natural Language Query:</strong> Ask questions in plain English, and the system will convert them to MongoDB queries using AI.
-        </div>
-        """, unsafe_allow_html=True)
+        # --- FIX: Replaced custom info-box markdown with st.info() ---
+        st.info(
+            "**Natural Language Query:** Ask questions in plain English, and the system will convert them to MongoDB queries using AI."
+        )
         
         nl_query = st.text_area(
             "Enter your question",
@@ -305,11 +304,10 @@ elif page == "Query Data":
                     st.error(f"Error: {str(e)}")
     
     else:  # Direct MongoDB Query
-        st.markdown("""
-        <div class="info-box">
-        <strong>Direct MongoDB Query:</strong> Write MongoDB queries in JSON format.
-        </div>
-        """, unsafe_allow_html=True)
+        # --- FIX: Replaced custom info-box markdown with st.info() ---
+        st.info(
+            "**Direct MongoDB Query:** Write MongoDB queries in JSON format."
+        )
         
         st.markdown("**Example Query:**")
         st.code('''{"operation": "find", "filter": {"price": {"$gt": 100}}, "projection": {"_id": 0}}''', language='json')
