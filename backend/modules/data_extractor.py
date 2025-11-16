@@ -6,7 +6,7 @@ import re
 import logging
 from typing import List, Dict, Any, Optional
 from bs4 import BeautifulSoup
-from lxml import etree # <-- NEW IMPORT
+from lxml import etree # Make sure you have lxml installed
 from .ollama_client import OllamaClient
 
 logger = logging.getLogger(__name__)
@@ -38,14 +38,13 @@ class DataExtractor:
         fragments.extend(self._extract_json_fragments(text))
         fragments.extend(self._extract_html_fragments(text))
         fragments.extend(self._extract_csv_fragments(text))
-        fragments.extend(self._extract_xml_fragments(text)) # <-- NEW CALL
+        fragments.extend(self._extract_xml_fragments(text))
         
         # Deduplicate and sort by position
         fragments = self._deduplicate_fragments(fragments)
         
         return fragments
     
-    # Existing _extract_json_fragments... (omitted for brevity, assume content is unchanged)
     def _extract_json_fragments(self, text: str) -> List[Dict[str, Any]]:
         """Extract JSON fragments using heuristic parsing."""
         fragments = []
@@ -119,13 +118,11 @@ class DataExtractor:
         
         return fragments
         
-    # Existing _extract_html_fragments... (omitted for brevity, assume content is unchanged)
     def _extract_html_fragments(self, text: str) -> List[Dict[str, Any]]:
         """Extract HTML fragments using BeautifulSoup."""
         fragments = []
         lines = text.split('\n')
         
-        # Find HTML tags
         html_pattern = re.compile(r'<[^>]+>')
         in_html = False
         html_start = -1
@@ -136,83 +133,110 @@ class DataExtractor:
                 if not in_html:
                     in_html = True
                     html_start = i
-                    current_html = []
                 current_html.append(line)
             elif in_html and line.strip() == '':
                 continue
             elif in_html:
-                # End of HTML block
                 html_text = '\n'.join(current_html)
                 try:
                     soup = BeautifulSoup(html_text, 'html.parser')
-                    # Parse HTML tables to structured data
-                    parsed_data = self._parse_html_tables(soup)
-                    if parsed_data or soup.get_text(strip=True):
+                    # --- MODIFICATION: Parse tables returns List[Dict] (rows) ---
+                    parsed_rows = self._parse_html_tables(soup)
+                    if parsed_rows:
                         fragments.append({
                             "type": "html",
                             "start_line": html_start + 1,
                             "end_line": i,
                             "content": html_text,
-                            "parsed_data": parsed_data
+                            # --- MODIFICATION: Parsed data is now the list of rows ---
+                            "parsed_data": parsed_rows 
                         })
                 except Exception as e:
                     logger.warning(f"Error parsing HTML: {e}")
                 
                 in_html = False
-                html_start = -1
                 current_html = []
         
-        # Handle end of file
         if in_html and current_html:
             html_text = '\n'.join(current_html)
             try:
                 soup = BeautifulSoup(html_text, 'html.parser')
-                parsed_data = self._parse_html_tables(soup)
-                fragments.append({
-                    "type": "html",
-                    "start_line": html_start + 1,
-                    "end_line": len(lines),
-                    "content": html_text,
-                    "parsed_data": parsed_data
-                })
+                parsed_rows = self._parse_html_tables(soup)
+                if parsed_rows:
+                    fragments.append({
+                        "type": "html",
+                        "start_line": html_start + 1,
+                        "end_line": len(lines),
+                        "content": html_text,
+                        "parsed_data": parsed_rows
+                    })
             except Exception as e:
                 logger.warning(f"Error parsing HTML: {e}")
         
         return fragments
 
+    # --- THIS FUNCTION IS COMPLETELY REWRITTEN ---
     def _parse_html_tables(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
-        """Extract structured data from HTML tables."""
-        tables_data = []
+        """
+        Extract structured data from HTML tables into a list of row dictionaries.
+        Each table's rows are added to the list.
+        """
+        all_rows_data = []
         tables = soup.find_all('table')
         
         for table in tables:
-            rows = []
             headers = []
             
-            # Extract headers
+            # Find headers: Check <thead> first
             thead = table.find('thead')
             if thead:
                 header_row = thead.find('tr')
                 if header_row:
                     headers = [th.get_text(strip=True) for th in header_row.find_all(['th', 'td'])]
             
-            # Extract rows
+            # Find body rows
             tbody = table.find('tbody') or table
-            for tr in tbody.find_all('tr'):
-                cells = [td.get_text(strip=True) for td in tr.find_all(['td', 'th'])]
-                if cells:
-                    if headers:
-                        row_dict = dict(zip(headers, cells))
-                        rows.append(row_dict)
-                    else:
-                        rows.append(cells)
             
-            if rows:
-                tables_data.append({"table": rows})
-        
-        return tables_data
+            # If no headers in <thead>, try finding <th> in the first row of <tbody>
+            if not headers:
+                first_row = tbody.find('tr')
+                if first_row and first_row.find('th'):
+                    headers = [th.get_text(strip=True) for th in first_row.find_all('th')]
+                    # Get all rows *after* this header row
+                    data_rows = first_row.find_next_siblings('tr')
+                else:
+                    # No headers found, can't parse as dict
+                    data_rows = []
+            else:
+                # Headers were in <thead>, get all rows from <tbody>
+                data_rows = tbody.find_all('tr')
+
+            if not headers:
+                logger.warning("Skipping table, no headers (<th>) found.")
+                continue
+
+            # --- Use DataCleaner to normalize header names ---
+            # This is optional but highly recommended for consistency
+            try:
+                from .data_cleaner import DataCleaner
+                clean_headers = [DataCleaner._normalize_field_name(h) for h in headers]
+            except ImportError:
+                # Fallback if cleaner isn't available
+                clean_headers = [h.lower().replace(' ', '_') for h in headers]
+            
+            # Extract data
+            for tr in data_rows:
+                cells = [td.get_text(strip=True) for td in tr.find_all(['td'])]
+                
+                # Ensure cell count matches header count
+                if len(cells) == len(clean_headers):
+                    row_dict = dict(zip(clean_headers, cells))
+                    all_rows_data.append(row_dict)
+                elif len(cells) > 0:
+                     logger.warning(f"Skipping row, cell count ({len(cells)}) doesn't match header count ({len(clean_headers)}).")
+
+        return all_rows_data
     
-    # Existing _extract_csv_fragments... (omitted for brevity, assume content is unchanged)
     def _extract_csv_fragments(self, text: str) -> List[Dict[str, Any]]:
         """Extract CSV fragments using heuristic detection."""
         fragments = []
@@ -313,7 +337,7 @@ class DataExtractor:
                 pass
             return []
 
-    # --- NEW XML EXTRACTION LOGIC ---
+    # --- XML EXTRACTION LOGIC ---
     def _xml_to_dict(self, element: etree.Element) -> Dict[str, Any]:
         """Recursively converts an lxml Element to a dictionary."""
         d = dict(element.attrib)
@@ -425,7 +449,6 @@ class DataExtractor:
                 items[new_key] = v
         return items
     
-    # Existing _deduplicate_fragments... (omitted for brevity, assume content is unchanged)
     def _deduplicate_fragments(self, fragments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Remove duplicate or overlapping fragments."""
         if not fragments:

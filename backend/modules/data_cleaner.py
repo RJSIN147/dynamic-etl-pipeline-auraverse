@@ -60,16 +60,23 @@ class DataCleaner:
         if isinstance(value, str):
             value = value.strip()
             
-            # Try to infer numeric types
-            if value.isdigit():
-                return int(value)
-            
-            # Try float
+            # --- START FIX: Robust Numeric Conversion ---
+            # Try to convert to float first. This handles "4", "4.0", and "4.5"
             try:
-                if '.' in value:
-                    return float(value)
-            except ValueError:
+                # Don't convert empty strings to 0
+                if value == "":
+                    return None
+                
+                f_value = float(value)
+                # If it's a whole number, return as int (e.g., 4.0 -> 4)
+                if f_value.is_integer():
+                    return int(f_value)
+                # Otherwise, return the float
+                return f_value
+            except (ValueError, TypeError):
+                # Not a float, continue...
                 pass
+            # --- END FIX ---
             
             # Try boolean
             if value.lower() in ['true', 'yes', 'y']:
