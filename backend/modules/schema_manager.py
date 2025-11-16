@@ -28,6 +28,7 @@ class SchemaManager:
         )
         
         # Infer schema from records
+        # This function now correctly infers from the 'cleaned_records' key in fragments
         collections_schema = self._infer_collections_schema(fragments, all_records)
         
         # Determine data types present
@@ -63,6 +64,9 @@ class SchemaManager:
         # 1. Log Schema History (The key change for immutable history)
         # We save a copy of the new schema version here.
         schema_copy = schema.copy()
+        # Ensure _id is not saved if it somehow slipped in
+        if "_id" in schema_copy:
+            del schema_copy["_id"]
         await self.schema_history_collection.insert_one(schema_copy)
         logger.info(f"Schema history logged for source_id={source_id}, version={schema['version']}")
 
@@ -84,24 +88,28 @@ class SchemaManager:
         # Group records by fragment type
         for fragment in fragments:
             frag_type = fragment['type']
-            parsed_data = fragment.get('parsed_data', [])
             
-            if not parsed_data:
-                continue
-            
-            # Handle different data structures
-            if isinstance(parsed_data, list):
-                records = parsed_data
-            elif isinstance(parsed_data, dict):
-                records = [parsed_data]
-            else:
-                continue
-            
+            # --- THIS IS THE FIX ---
+            # We now build the schema from the CLEANED data, not the original parsed data.
+            # This ensures schema types (e.g., number) match the DB (e.g., number).
+            records_to_infer_from = fragment.get('cleaned_records', [])
+            # --- END FIX ---
+
+            if not records_to_infer_from:
+                # Fallback just in case 'cleaned_records' isn't present, but 'parsed_data' is
+                parsed_data = fragment.get('parsed_data', [])
+                if isinstance(parsed_data, list):
+                    records_to_infer_from = parsed_data
+                elif isinstance(parsed_data, dict):
+                    records_to_infer_from = [parsed_data]
+                else:
+                    continue # No data to infer from
+
             # Create collection name
             collection_name = f"{frag_type}_data"
             
             # Infer field types
-            fields_schema = self._infer_fields_schema(records)
+            fields_schema = self._infer_fields_schema(records_to_infer_from)
             
             if collection_name in collections:
                 # Merge with existing collection schema
@@ -109,11 +117,11 @@ class SchemaManager:
                     collections[collection_name]['fields'],
                     fields_schema
                 )
-                collections[collection_name]['record_count'] += len(records)
+                collections[collection_name]['record_count'] += len(records_to_infer_from)
             else:
                 collections[collection_name] = {
                     "fields": fields_schema,
-                    "record_count": len(records),
+                    "record_count": len(records_to_infer_from),
                     "source_type": frag_type
                 }
         
@@ -148,11 +156,19 @@ class SchemaManager:
             
             # Infer type from non-null values
             field_type = self._infer_type(non_null_values)
-            is_required = len(non_null_values) == total_records
+      
+            # Check if all values of this field are present
+            is_required = len(values) == total_records
+            
+            # Check if all *records* have this field
+            field_present_in_all_records = len(values) == total_records
+            # This logic might need refinement: a field is required if it exists
+            # in every record *that belongs to this type*.
+            # The current logic is simpler: is it present in all records *in this batch*?
             
             fields[field_name] = {
                 "type": field_type,
-                "required": is_required,
+                "required": field_present_in_all_records,
                 "sample": non_null_values[0] if non_null_values else None
             }
         
@@ -164,6 +180,14 @@ class SchemaManager:
             return "unknown"
         
         # Check first non-null value
+        types_present = set(type(v) for v in values)
+        
+        if len(types_present) > 1:
+             # Handle mixed lists, e.g., [1, "2.5"]
+            if str in types_present or float in types_present or int in types_present:
+                return "string" # Default to string if mixed
+            return "mixed"
+        
         sample = values[0]
         
         if isinstance(sample, bool):
@@ -187,12 +211,21 @@ class SchemaManager:
         
         for field_name, field_info in new.items():
             if field_name in merged:
-                # Update type if different (prefer more specific type)
-                if merged[field_name]['type'] != field_info['type']:
-                    merged[field_name]['type'] = 'mixed'
+                # Update type if different
+                # If one is string, the merged type should be string
+                if 'string' in (merged[field_name]['type'], field_info['type']):
+                    merged[field_name]['type'] = 'string'
+                elif merged[field_name]['type'] != field_info['type']:
+                    merged[field_name]['type'] = 'mixed' # e.g., int and float
+                
                 # Update required status (field is required only if always present)
                 merged[field_name]['required'] = merged[field_name]['required'] and field_info['required']
+                
+                # Update sample
+                merged[field_name]['sample'] = field_info['sample']
             else:
+                # This is a new field, it's not required for *all* records
+                field_info['required'] = False
                 merged[field_name] = field_info
         
         return merged
@@ -208,6 +241,8 @@ class SchemaManager:
                     merged[collection_name]['fields'],
                     collection_info['fields']
                 )
+                # We need to be careful with record counts.
+                # This simple add is correct for *new* data.
                 merged[collection_name]['record_count'] += collection_info['record_count']
             else:
                 merged[collection_name] = collection_info
