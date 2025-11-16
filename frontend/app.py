@@ -55,6 +55,14 @@ st.markdown("""
         border: 1px solid #f5c6cb;
         margin-bottom: 1rem;
     }
+    /* Custom styling for Schema History versions */
+    .schema-version-card {
+        border: 1px solid #ccc;
+        border-left: 5px solid #764ba2;
+        padding: 15px;
+        margin-bottom: 10px;
+        border-radius: 5px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -145,7 +153,7 @@ if page == "Upload & Process":
                                 st.metric("Total Records", summary.get('total_records', 0))
                             with col3:
                                 data_types = summary.get('data_types', [])
-                                st.metric("Data Types", len(data_types))
+                                st.metric("Data Types", ', '.join(data_types))
                             
                             # Fragment details
                             st.markdown("### 📊 Extracted Fragments")
@@ -351,7 +359,8 @@ elif page == "Query Data":
 elif page == "History":
     st.markdown('<div class="section-header">📜 History</div>', unsafe_allow_html=True)
     
-    tab1, tab2 = st.tabs(["Upload History", "Query History"])
+    # NEW TAB ADDED
+    tab1, tab2, tab3 = st.tabs(["Upload History", "Query History", "Schema History"])
     
     with tab1:
         if st.button("🔄 Fetch Upload History"):
@@ -423,12 +432,72 @@ elif page == "History":
                 
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
+    
+    with tab3: # <-- SCHEMA HISTORY TAB IMPLEMENTATION
+        if st.button("🔄 Fetch Schema History"):
+            with st.spinner("Fetching schema versions..."):
+                try:
+                    response = requests.get(
+                        f"{API_URL}/history/schema",
+                        params={'source_id': st.session_state.source_id}
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        schema_versions = result.get('schema_versions', [])
+                        
+                        if schema_versions:
+                            st.success(f"Found {len(schema_versions)} schema versions")
+                            
+                            for version_info in schema_versions:
+                                version_num = version_info.get('version', 'N/A')
+                                created_at = version_info.get('updated_at', 'N/A')
+                                collections = version_info.get('collections', {})
+                                data_types = version_info.get('data_types_present', [])
+
+                                st.markdown(f'<div class="schema-version-card">', unsafe_allow_html=True)
+                                
+                                st.markdown(f'#### 🗂️ Schema Version {version_num}')
+                                st.write(f"**Updated At:** {created_at.split('T')[0]} @ {created_at.split('T')[1].split('.')[0]}")
+                                
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.write(f"**Collections:** {len(collections)}")
+                                with col2:
+                                    st.write(f"**Data Types:** {', '.join(data_types)}")
+
+                                with st.expander("View Details"):
+                                    for coll_name, coll_info in collections.items():
+                                        st.markdown(f"**📦 {coll_name}** ({coll_info.get('record_count', 0)} records)")
+                                        
+                                        fields_summary = []
+                                        for field_name, field_details in coll_info.get('fields', {}).items():
+                                            fields_summary.append(f"**{field_name}** ({field_details['type']}, {'Req' if field_details['required'] else 'Opt'})")
+                                        
+                                        # Display fields as markdown list for better visibility
+                                        st.markdown("— " + " | ".join(fields_summary))
+                                    
+                                    # --- NEW: Add Raw Schema JSON Expander ---
+                                    st.markdown("---")
+                                    with st.expander("📄 View Raw Schema JSON for this Version"):
+                                        # We use the entire version_info dictionary, which contains the complete schema
+                                        st.json(version_info)
+                                
+                                st.markdown('</div>', unsafe_allow_html=True)
+
+                        else:
+                            st.info("No schema history found for this source ID. Upload a file to create a version.")
+                    else:
+                        st.error(f"Error fetching schema history: {response.status_code}")
+                
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+
 
 # Footer
 st.sidebar.markdown("---")
 st.sidebar.markdown("""
 ### About
-**ETL Pipeline System**  
-Dynamic data ingestion and querying  
+**ETL Pipeline System** Dynamic data ingestion and querying  
 Powered by Ollama & FastAPI
 """)

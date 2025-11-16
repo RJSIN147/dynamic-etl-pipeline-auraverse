@@ -218,6 +218,15 @@ async def get_query_history(source_id: str = Query(...)):
         "queries": history
     }
 
+@api_router.get("/history/schema")
+async def get_schema_history(source_id: str = Query(...)):
+    """NEW: Get schema history for a source."""
+    history = await schema_manager.get_schema_history(source_id)
+    return {
+        "source_id": source_id,
+        "schema_versions": history
+    }
+
 @api_router.get("/")
 async def root():
     return {"message": "ETL Pipeline API", "status": "running"}

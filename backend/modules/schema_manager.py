@@ -12,27 +12,14 @@ class SchemaManager:
     def __init__(self, db):
         self.db = db
         self.schemas_collection = db.schemas
+        self.schema_history_collection = db.schema_history # <-- NEW: History Collection
     
     async def generate_schema(self, source_id: str, fragments: List[Dict[str, Any]], 
                              all_records: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Generate database-agnostic schema from extracted data.
         
-        Schema structure:
-        {
-            "source_id": str,
-            "version": int,
-            "created_at": datetime,
-            "updated_at": datetime,
-            "collections": {
-                "collection_name": {
-                    "fields": {
-                        "field_name": {"type": str, "required": bool, "sample": Any}
-                    },
-                    "record_count": int
-                }
-            },
-            "data_types_present": ["html", "json", "csv"]
-        }
+        This function now creates a historical record of the schema version
+        before updating the main schema document.
         """
         # Get existing schema if any
         existing_schema = await self.schemas_collection.find_one(
@@ -73,14 +60,20 @@ class SchemaManager:
                 "data_types_present": data_types
             }
         
-        # Save schema
+        # 1. Log Schema History (The key change for immutable history)
+        # We save a copy of the new schema version here.
+        schema_copy = schema.copy()
+        await self.schema_history_collection.insert_one(schema_copy)
+        logger.info(f"Schema history logged for source_id={source_id}, version={schema['version']}")
+
+        # 2. Save Current Schema (for quick lookup)
         await self.schemas_collection.update_one(
             {"source_id": source_id},
             {"$set": schema},
             upsert=True
         )
         
-        logger.info(f"Schema generated for source_id={source_id}, version={schema['version']}")
+        logger.info(f"Schema generated and updated for source_id={source_id}, version={schema['version']}")
         return schema
     
     def _infer_collections_schema(self, fragments: List[Dict[str, Any]], 
@@ -222,9 +215,17 @@ class SchemaManager:
         return merged
     
     async def get_schema(self, source_id: str) -> Dict[str, Any]:
-        """Get schema for a source."""
+        """Get CURRENT schema for a source."""
         schema = await self.schemas_collection.find_one(
             {"source_id": source_id},
             {"_id": 0}
         )
         return schema
+    
+    async def get_schema_history(self, source_id: str) -> List[Dict[str, Any]]:
+        """NEW: Get all schema versions for a source."""
+        history = await self.schema_history_collection.find(
+            {"source_id": source_id},
+            {"_id": 0}
+        ).sort("version", -1).to_list(100) # Sort by version descending
+        return history
